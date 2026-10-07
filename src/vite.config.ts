@@ -12,6 +12,8 @@ export default defineConfig({
     minify: 'esbuild',
     sourcemap: false,
     reportCompressedSize: false,
+    // demo.html renders the overlay above a mock desktop (README visuals / showcase).
+    rollupOptions: { input: { main: 'index.html', demo: 'demo.html' } },
     chunkSizeWarningLimit: 900,
   },
   esbuild: { legalComments: 'none' },

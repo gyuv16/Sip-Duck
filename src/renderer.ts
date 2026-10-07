@@ -3,9 +3,10 @@
  *
  * Characters are authored as compact pose tables and rasterised ONCE into a single packed
  * GPU texture atlas (one RenderTexture, one texture bind for the whole scene). Animation
- * at runtime is pure texture-frame swapping on plain Sprites — no per-frame Graphics
- * tessellation, no video decoding. External PNG/AVIF + JSON sprite sheets placed in
- * `public/assets/<kind>.json` automatically override the procedural art.
+ * at runtime is pure texture-frame swapping (see animation_controller.ts) — no per-frame
+ * Graphics tessellation, no video decoding. External PNG/WEBP/AVIF + JSON sprite sheets
+ * (configured in `public/assets/characters.json`, or dropped at `public/assets/<kind>.json`)
+ * override the procedural art per character.
  *
  * Everything that allocates GPU memory is tracked and released in `destroy()` calls so
  * switching scene modes never leaks textures.
@@ -16,7 +17,6 @@ import {
   Graphics,
   Rectangle,
   RenderTexture,
-  Sprite,
   Spritesheet,
   Text,
   Texture,
@@ -431,9 +431,16 @@ function drawCat(g: Graphics, p: PetPose, frameIdx: number): void {
   // Head.
   const hx = cx + 14;
   const hy = by - (sleeping ? 2 : 10);
-  g.poly([hx - 10, hy - 4, hx - 7, hy - 16, hx - 1, hy - 7]).fill(body);
-  g.poly([hx + 1, hy - 7, hx + 7, hy - 16, hx + 10, hy - 4]).fill(body);
-  g.poly([hx - 8, hy - 6, hx - 6.5, hy - 12, hx - 3, hy - 7]).fill(0xffb3c7);
+  if (p.eyes === 'dizzy') {
+    // Exaggerated wilted ears drooping sideways.
+    g.poly([hx - 7, hy - 7, hx - 19, hy - 2, hx - 9, hy - 1]).fill(body);
+    g.poly([hx + 7, hy - 7, hx + 19, hy - 2, hx + 9, hy - 1]).fill(body);
+    g.poly([hx - 9, hy - 5, hx - 16, hy - 2.5, hx - 10, hy - 2]).fill(0xffb3c7);
+  } else {
+    g.poly([hx - 10, hy - 4, hx - 7, hy - 16, hx - 1, hy - 7]).fill(body);
+    g.poly([hx + 1, hy - 7, hx + 7, hy - 16, hx + 10, hy - 4]).fill(body);
+    g.poly([hx - 8, hy - 6, hx - 6.5, hy - 12, hx - 3, hy - 7]).fill(0xffb3c7);
+  }
   g.circle(hx, hy, 11).fill(body);
   g.ellipse(hx + 2, hy + 4, 5, 3.5).fill(0xfff1e0);
   for (const side of [-1, 1]) {
@@ -532,8 +539,6 @@ function shelfPack(cells: CellRequest[], maxWidth: number, pad: number): { place
 }
 
 export const BANNER_KEY = 'fx:banner';
-export const DROPLET_KEY = 'fx:droplet';
-export const STAR_KEY = 'fx:star';
 
 /**
  * Owns every GPU resource of the current scene: the packed atlas RenderTexture, the frame
@@ -545,15 +550,31 @@ export class ClipLibrary {
   private readonly frameTextures: Texture[] = [];
   private atlas: RenderTexture | null = null;
   private readonly externalUrls: string[] = [];
+  private readonly externalKinds = new Set<ActorKind>();
 
-  static async build(renderer: Renderer, kinds: readonly ActorKind[]): Promise<ClipLibrary> {
+  /**
+   * @param sheetUrls   explicit spritesheet JSON per character (from characters.json);
+   *                    characters without one also try `assets/<kind>.json`.
+   * @param animAlias   maps our animation names to the names used inside a sheet.
+   */
+  static async build(
+    renderer: Renderer,
+    kinds: readonly ActorKind[],
+    sheetUrls: Partial<Record<ActorKind, string>> = {},
+    animAlias: (kind: ActorKind, anim: AnimName) => string | undefined = () => undefined,
+  ): Promise<ClipLibrary> {
     const lib = new ClipLibrary();
     const procedural: ActorKind[] = [];
     for (const kind of new Set(kinds)) {
-      if (!(await lib.tryLoadExternal(kind))) procedural.push(kind);
+      if (await lib.tryLoadExternal(kind, sheetUrls[kind] ?? `assets/${kind}.json`, animAlias)) lib.externalKinds.add(kind);
+      else procedural.push(kind);
     }
     lib.buildProcedural(renderer, procedural);
     return lib;
+  }
+
+  isExternal(kind: ActorKind): boolean {
+    return this.externalKinds.has(kind);
   }
 
   get(kind: ActorKind, anim: AnimName): AnimClip {
@@ -566,9 +587,8 @@ export class ClipLibrary {
     return this.fx.get(key) ?? Texture.WHITE;
   }
 
-  /** External sheet: `assets/<kind>.json` (TexturePacker / Aseprite JSON with `animations`). */
-  private async tryLoadExternal(kind: ActorKind): Promise<boolean> {
-    const url = `assets/${kind}.json`;
+  /** External sheet (TexturePacker / Aseprite JSON with an `animations` map). */
+  private async tryLoadExternal(kind: ActorKind, url: string, animAlias: (kind: ActorKind, anim: AnimName) => string | undefined): Promise<boolean> {
     try {
       const head = await fetch(url, { method: 'HEAD', cache: 'no-store' });
       const type = head.headers.get('content-type') ?? '';
@@ -577,7 +597,7 @@ export class ClipLibrary {
       if (!sheet?.animations) return false;
       this.externalUrls.push(url);
       for (const anim of ALL_ANIMS) {
-        const frames = sheet.animations[anim];
+        const frames = sheet.animations[animAlias(kind, anim) ?? anim];
         if (frames?.length) {
           const def = (kind === 'hero' || kind === 'partner' ? HUMAN_ANIMS : PET_ANIMS)[anim];
           this.clips.set(`${kind}:${anim}`, { frames, fps: def.fps, loop: def.loop });
@@ -619,8 +639,6 @@ export class ClipLibrary {
     }
 
     requests.push({ key: BANNER_KEY, w: 168, h: 46, paint: paintBanner });
-    requests.push({ key: DROPLET_KEY, w: 12, h: 16, paint: paintDroplet });
-    requests.push({ key: STAR_KEY, w: 14, h: 14, paint: (h) => { const g = new Graphics(); sparkle(g, 7, 7); h.addChild(g); } });
 
     const resolution = Math.min(2, Math.max(1, globalThis.devicePixelRatio || 1));
     const maxW = Math.floor(2048 / resolution);
@@ -650,10 +668,8 @@ export class ClipLibrary {
       const frames = c.frameKeys.map((k) => byKey.get(k)).filter((t): t is Texture => !!t);
       this.clips.set(c.key, { frames, fps: c.fps, loop: c.loop });
     }
-    for (const k of [BANNER_KEY, DROPLET_KEY, STAR_KEY]) {
-      const t = byKey.get(k);
-      if (t) this.fx.set(k, t);
-    }
+    const banner = byKey.get(BANNER_KEY);
+    if (banner) this.fx.set(BANNER_KEY, banner);
   }
 
   destroy(): void {
@@ -716,180 +732,4 @@ function paintBanner(holder: Container): void {
   label.anchor.set(0.5);
   label.position.set(84, 20);
   holder.addChild(label);
-}
-
-function paintDroplet(holder: Container): void {
-  const g = new Graphics();
-  g.poly([6, 0, 1, 9, 11, 9]).fill(0x5ec2ff);
-  g.circle(6, 10, 5).fill(0x5ec2ff);
-  g.circle(4, 9, 1.6).fill({ color: 0xffffff, alpha: 0.8 });
-  holder.addChild(g);
-}
-
-// ---------------------------------------------------------------------------------------------
-// Runtime views
-// ---------------------------------------------------------------------------------------------
-
-/**
- * A character sprite that plays clips by swapping atlas sub-textures. `advance()` reports
- * whether the visible frame changed so the frame scheduler can skip redundant GPU work.
- */
-export class ActorView {
-  readonly root = new Container();
-  readonly sprite: Sprite;
-  private readonly banner: Sprite;
-  private clip: AnimClip;
-  private anim: AnimName = 'idle';
-  private frame = 0;
-  private accMs = 0;
-  private finished = false;
-
-  constructor(readonly kind: ActorKind, private readonly lib: ClipLibrary, scale = 1) {
-    this.clip = lib.get(kind, 'idle');
-    this.sprite = new Sprite(this.clip.frames[0]);
-    this.sprite.anchor.set(0.5, 1);
-    this.root.addChild(this.sprite);
-    this.root.scale.set(scale);
-
-    this.banner = new Sprite(lib.effect(BANNER_KEY));
-    this.banner.anchor.set(0.5, 1);
-    this.banner.position.set(0, -cellFor(kind).h + 6);
-    this.banner.visible = false;
-    this.root.addChild(this.banner);
-  }
-
-  get current(): AnimName {
-    return this.anim;
-  }
-
-  /** True once a non-looping clip has reached its last frame. */
-  get done(): boolean {
-    return this.finished;
-  }
-
-  get fps(): number {
-    return this.clip.fps;
-  }
-
-  play(anim: AnimName, restart = false): boolean {
-    if (anim === this.anim && !restart) return false;
-    this.anim = anim;
-    this.clip = this.lib.get(this.kind, anim);
-    this.frame = 0;
-    this.accMs = 0;
-    this.finished = false;
-    this.sprite.texture = this.clip.frames[0];
-    this.banner.visible = anim === 'stretch' && (this.kind === 'hero' || this.kind === 'partner');
-    return true;
-  }
-
-  setFacing(dir: 1 | -1): boolean {
-    const want = Math.abs(this.sprite.scale.x) * dir;
-    if (this.sprite.scale.x === want) return false;
-    this.sprite.scale.x = want;
-    return true;
-  }
-
-  advance(dtMs: number): boolean {
-    if (this.finished || this.clip.frames.length < 2) return false;
-    this.accMs += dtMs;
-    const step = 1000 / this.clip.fps;
-    if (this.accMs < step) return false;
-    const n = Math.floor(this.accMs / step);
-    this.accMs -= n * step;
-    let next = this.frame + n;
-    if (next >= this.clip.frames.length) {
-      if (this.clip.loop) next %= this.clip.frames.length;
-      else {
-        next = this.clip.frames.length - 1;
-        this.finished = true;
-      }
-    }
-    if (next === this.frame) return false;
-    this.frame = next;
-    this.sprite.texture = this.clip.frames[next];
-    return true;
-  }
-
-  /** Milliseconds until the next frame flip (Infinity when static). */
-  msUntilNextFrame(): number {
-    if (this.finished || this.clip.frames.length < 2) return Infinity;
-    return Math.max(0, 1000 / this.clip.fps - this.accMs);
-  }
-
-  destroy(): void {
-    // Textures belong to the ClipLibrary; only destroy the display objects.
-    this.root.destroy({ children: true, texture: false, textureSource: false });
-  }
-}
-
-interface Particle {
-  sprite: Sprite;
-  vx: number;
-  vy: number;
-  life: number;
-}
-
-/** Fixed-size particle pool for splash/sparkle effects: zero allocations after construction. */
-export class ParticlePool {
-  readonly root = new Container();
-  private readonly items: Particle[] = [];
-  private active = 0;
-
-  constructor(lib: ClipLibrary, size = 28) {
-    for (let i = 0; i < size; i++) {
-      const sprite = new Sprite(lib.effect(i % 4 === 0 ? STAR_KEY : DROPLET_KEY));
-      sprite.anchor.set(0.5);
-      sprite.visible = false;
-      this.root.addChild(sprite);
-      this.items.push({ sprite, vx: 0, vy: 0, life: 0 });
-    }
-  }
-
-  get busy(): boolean {
-    return this.active > 0;
-  }
-
-  burst(x: number, y: number, count: number, spread = 1): void {
-    let spawned = 0;
-    for (const p of this.items) {
-      if (spawned >= count) break;
-      if (p.life > 0) continue;
-      const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * spread;
-      const speed = 160 + Math.random() * 260;
-      p.vx = Math.cos(a) * speed;
-      p.vy = Math.sin(a) * speed;
-      p.life = 0.9 + Math.random() * 0.5;
-      p.sprite.position.set(x, y);
-      p.sprite.alpha = 1;
-      p.sprite.scale.set(0.7 + Math.random() * 0.6);
-      p.sprite.visible = true;
-      spawned++;
-      this.active++;
-    }
-  }
-
-  /** Returns true while anything is still moving (caller must keep rendering). */
-  update(dt: number, floor: number): boolean {
-    if (this.active === 0) return false;
-    for (const p of this.items) {
-      if (p.life <= 0) continue;
-      p.life -= dt;
-      p.vy += 900 * dt;
-      p.sprite.x += p.vx * dt;
-      p.sprite.y = Math.min(floor - 4, p.sprite.y + p.vy * dt);
-      p.sprite.alpha = Math.max(0, Math.min(1, p.life * 2));
-      if (p.life <= 0) {
-        p.sprite.visible = false;
-        this.active--;
-      }
-    }
-    return this.active > 0;
-  }
-
-  destroy(): void {
-    this.root.destroy({ children: true, texture: false, textureSource: false });
-    this.items.length = 0;
-    this.active = 0;
-  }
 }

@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@esotericsoftware/spine-pixi-v8": "^4.3.13",
     "@tauri-apps/api": "^2.8.0",
     "pixi.js": "^8.13.0"
   },

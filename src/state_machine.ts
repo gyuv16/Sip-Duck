@@ -77,6 +77,11 @@ export interface Actor {
   anchorId: number | null;
   /** state to return to after a drag/fall interrupt */
   resume: CharState | null;
+  /**
+   * While true the SceneManager owns this actor's position and animation (choreographed
+   * pair actions). The Director keeps its logical state but skips movement/decisions.
+   */
+  scripted: boolean;
 }
 
 export interface World {
@@ -162,6 +167,7 @@ export class Director {
         targetX: null,
         anchorId: heroId,
         resume: null,
+        scripted: false,
       };
       if (kind === 'hero') heroId = actor.id;
       this.actors.push(actor);
@@ -305,6 +311,7 @@ export class Director {
   }
 
   beginDrag(a: Actor, px: number, py: number): void {
+    a.scripted = false;
     if (!this.isBusy(a) && a.state !== CharState.Dragged) {
       const pending = a.state;
       a.resume = pending === CharState.Thirsty || pending === CharState.SittingTooLong || pending === CharState.Stretching || pending === CharState.Drinking
@@ -360,7 +367,7 @@ export class Director {
     const partner = this.actors.find((a) => a.kind === 'partner');
 
     for (const a of this.actors) {
-      if (this.isBusy(a)) continue;
+      if (this.isBusy(a) || a.scripted) continue;
 
       switch (a.state) {
         case CharState.Idle: {
@@ -388,7 +395,7 @@ export class Director {
     }
 
     // Couple choreography.
-    if (hero && partner && this.interactCooldown === 0 && hero.state === CharState.Idle && partner.state === CharState.Idle && !this.userAway) {
+    if (hero && partner && !hero.scripted && !partner.scripted && this.interactCooldown === 0 && hero.state === CharState.Idle && partner.state === CharState.Idle && !this.userAway) {
       const dist = Math.abs(hero.body.x - partner.body.x);
       if (dist > this.world.width * 0.45 && this.rng() < 0.35) {
         // Wave at each other across the screen.
@@ -412,6 +419,7 @@ export class Director {
     let moved = false;
     for (const a of this.actors) {
       a.stateTime += dt;
+      if (a.scripted) continue;
       const b = a.body;
       const before = b.x + b.y * 1e4 + b.facing;
 

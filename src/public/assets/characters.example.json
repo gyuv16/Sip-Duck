@@ -1,0 +1,50 @@
+{
+  "hero": {
+    "type": "spine",
+    "skeleton": "assets/hero/hero.skel",
+    "atlas": "assets/hero/hero.atlas",
+    "scale": 0.25,
+    "mix": 0.2,
+    "headY": -150,
+    "animations": {
+      "idle": "idle",
+      "walk": "walk",
+      "drink": "drink",
+      "stretch": "arms-up",
+      "whistle": "whistle",
+      "dragged": "panic-dangle",
+      "fall": "fall",
+      "collapse": "faint",
+      "sleep": "sleep",
+      "wave": "wave"
+    },
+    "expressions": {
+      "panic": "face/panic",
+      "happy": "face/smile",
+      "dizzy": "face/swirl-eyes",
+      "surprised": "face/shock",
+      "determined": "face/determined",
+      "sleepy": "face/sleepy",
+      "love": "face/heart-eyes",
+      "angry": "face/angry"
+    },
+    "attachments": {
+      "sign": { "slot": "prop-hand", "attachment": "warning-sign" },
+      "banner": { "slot": "prop-hand", "attachment": "stretch-banner" },
+      "shout": { "slot": "prop-hand", "attachment": "thirst-bubble" }
+    }
+  },
+  "partner": {
+    "type": "spine",
+    "skeleton": "assets/partner/partner.json",
+    "atlas": "assets/partner/partner.atlas",
+    "scale": 0.25,
+    "headY": -160
+  },
+  "cat": {
+    "type": "spritesheet",
+    "json": "assets/cat/cat.json",
+    "scale": 1,
+    "animations": { "walk": "run", "collapse": "faint" }
+  }
+}
