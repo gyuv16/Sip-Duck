@@ -159,8 +159,12 @@ export interface ToastOptions {
   title: string;
   body: string;
   actions: ToastAction[];
-  /** 0..1 progress (e.g. glasses / goal); omitted = no bar */
-  progress?: number;
+  /** curved arc gauge (e.g. glasses logged / goal); omitted = none */
+  gauge?: { value: number; max: number; label: string };
+  /** HUD icon */
+  icon?: 'clock' | 'drop' | 'spark';
+  /** 'anchor' follows the main character; 'corner' docks top-right like a cinema HUD */
+  dock?: 'anchor' | 'corner';
   /** auto dismiss after ms; omitted = sticky */
   ttlMs?: number;
 }
@@ -175,6 +179,7 @@ export interface Rect {
 interface ToastEntry {
   id: number;
   kind: ToastKind;
+  dock: 'anchor' | 'corner';
   el: HTMLDivElement;
   timer: number | null;
   ac: AbortController;
@@ -182,24 +187,42 @@ interface ToastEntry {
 
 const STYLE = `
 .sd-toast-layer{position:fixed;inset:0;pointer-events:none;z-index:10;contain:strict}
-.sd-toast{position:absolute;left:0;top:0;min-width:220px;max-width:280px;padding:12px 14px 12px;border-radius:16px;
-  background:rgba(255,255,255,.94);color:#2b2440;font:13px/1.35 system-ui,"Segoe UI",sans-serif;
-  box-shadow:0 8px 28px rgba(43,36,64,.28);pointer-events:auto;will-change:transform;
-  border:2px solid var(--sd-accent);opacity:0;transition:opacity .18s ease-out}
+.sd-toast{position:absolute;left:0;top:0;width:290px;padding:14px 16px 14px;border-radius:18px;
+  background:linear-gradient(145deg,rgba(22,24,44,.62),rgba(12,14,28,.48));
+  -webkit-backdrop-filter:blur(14px) saturate(1.4);backdrop-filter:blur(14px) saturate(1.4);
+  color:#eef1ff;font:12.5px/1.4 "Segoe UI",system-ui,sans-serif;
+  border:1px solid color-mix(in srgb,var(--sd-accent) 65%,transparent);
+  box-shadow:0 0 0 1px rgba(255,255,255,.05) inset,0 0 26px color-mix(in srgb,var(--sd-accent) 45%,transparent),0 10px 30px rgba(0,0,0,.35);
+  pointer-events:auto;will-change:transform;opacity:0;transition:opacity .22s ease-out}
 .sd-toast.sd-in{opacity:1}
-.sd-toast[data-kind=hydration]{--sd-accent:#3fa9f5}
-.sd-toast[data-kind=sedentary]{--sd-accent:#ff6f3c}
-.sd-toast[data-kind=info]{--sd-accent:#a78bfa}
-.sd-toast h3{margin:0 0 4px;font-size:14px;font-weight:800;color:var(--sd-accent)}
-.sd-toast p{margin:0 0 10px}
-.sd-bar{height:6px;border-radius:3px;background:#e7ecf5;margin:0 0 10px;overflow:hidden}
-.sd-bar>i{display:block;height:100%;background:var(--sd-accent);border-radius:3px}
-.sd-actions{display:flex;gap:6px;flex-wrap:wrap}
-.sd-actions button{flex:1;border:0;border-radius:10px;padding:7px 8px;font:600 12px system-ui,sans-serif;cursor:pointer;
-  background:#eef1f8;color:#2b2440}
-.sd-actions button.sd-primary{background:var(--sd-accent);color:#fff}
-.sd-actions button:hover{filter:brightness(.95)}
-.sd-close{position:absolute;top:6px;right:8px;border:0;background:none;font-size:15px;color:#8a84a3;cursor:pointer}
+.sd-toast::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--sd-accent) 18%,transparent),transparent);
+  mask:linear-gradient(#000,transparent 40%)}
+.sd-toast[data-kind=hydration]{--sd-accent:#3fb6ff}
+.sd-toast[data-kind=sedentary]{--sd-accent:#ff8a3c}
+.sd-toast[data-kind=info]{--sd-accent:#b69cff}
+.sd-head{display:flex;align-items:center;gap:10px;margin:0 0 6px}
+.sd-icon{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--sd-accent) 22%,transparent);box-shadow:0 0 14px color-mix(in srgb,var(--sd-accent) 60%,transparent)}
+.sd-icon svg{width:22px;height:22px;stroke:var(--sd-accent);fill:none;stroke-width:2;stroke-linecap:round}
+.sd-hand{transform-origin:12px 12px;animation:sd-spin 2s linear infinite}
+@keyframes sd-spin{to{transform:rotate(360deg)}}
+.sd-toast h3{margin:0;font:800 13px/1.15 "Segoe UI",system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--sd-accent);text-shadow:0 0 12px color-mix(in srgb,var(--sd-accent) 70%,transparent)}
+.sd-toast p{margin:0 0 10px;color:#d5d9f2;font-weight:600;letter-spacing:.02em}
+.sd-gauge{display:flex;align-items:center;gap:12px;margin:2px 0 10px}
+.sd-gauge svg{flex:none;width:96px;height:56px;overflow:visible}
+.sd-gauge .sd-track{stroke:rgba(255,255,255,.14)}
+.sd-gauge .sd-fill{stroke:var(--sd-accent);filter:drop-shadow(0 0 5px var(--sd-accent))}
+.sd-gauge b{display:block;font:800 20px/1 "Segoe UI",system-ui,sans-serif;color:#fff}
+.sd-gauge span{font-size:11px;color:#aab3d6;letter-spacing:.06em;text-transform:uppercase}
+.sd-actions{display:flex;gap:6px}
+.sd-actions button{flex:1;border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:7px 8px;
+  font:700 11.5px "Segoe UI",system-ui,sans-serif;letter-spacing:.04em;cursor:pointer;background:rgba(255,255,255,.07);color:#e7eaff}
+.sd-actions button.sd-primary{background:color-mix(in srgb,var(--sd-accent) 75%,transparent);border-color:transparent;color:#fff;
+  box-shadow:0 0 14px color-mix(in srgb,var(--sd-accent) 55%,transparent)}
+.sd-actions button:hover{filter:brightness(1.15)}
+.sd-close{position:absolute;top:8px;right:10px;border:0;background:none;font-size:15px;color:#8f97bd;cursor:pointer}
 `;
 
 /**
@@ -251,21 +274,23 @@ export class ToastUI {
     close.addEventListener('click', () => this.dismiss(id), { signal: ac.signal });
     el.appendChild(close);
 
+    const head = document.createElement('div');
+    head.className = 'sd-head';
+    if (opts.icon) {
+      const icon = document.createElement('div');
+      icon.className = 'sd-icon';
+      icon.innerHTML = ICONS[opts.icon];
+      head.appendChild(icon);
+    }
     const h = document.createElement('h3');
     h.textContent = opts.title;
-    el.appendChild(h);
+    head.appendChild(h);
+    el.appendChild(head);
     const p = document.createElement('p');
     p.textContent = opts.body;
     el.appendChild(p);
 
-    if (opts.progress !== undefined) {
-      const bar = document.createElement('div');
-      bar.className = 'sd-bar';
-      const fill = document.createElement('i');
-      fill.style.width = `${Math.round(Math.min(1, Math.max(0, opts.progress)) * 100)}%`;
-      bar.appendChild(fill);
-      el.appendChild(bar);
-    }
+    if (opts.gauge) el.appendChild(arcGauge(opts.gauge.value, opts.gauge.max, opts.gauge.label));
 
     const actions = document.createElement('div');
     actions.className = 'sd-actions';
@@ -283,7 +308,7 @@ export class ToastUI {
 
     this.layer.appendChild(el);
     const timer = opts.ttlMs ? window.setTimeout(() => this.dismiss(id), opts.ttlMs) : null;
-    this.toasts.push({ id, kind: opts.kind, el, timer, ac });
+    this.toasts.push({ id, kind: opts.kind, dock: opts.dock ?? 'anchor', el, timer, ac });
     requestAnimationFrame(() => el.classList.add('sd-in'));
     this.lastLayoutKey = '';
     this.layout();
@@ -315,25 +340,37 @@ export class ToastUI {
   }
 
   private layout(): void {
-    const key = `${this.anchor.x},${this.anchor.y},${this.toasts.length}`;
+    const key = `${this.anchor.x},${this.anchor.y},${this.toasts.length},${window.innerWidth}`;
     if (key === this.lastLayoutKey) return;
     this.lastLayoutKey = key;
     const vw = window.innerWidth;
-    let y = this.anchor.y;
-    // Stack upwards from the anchor; clamp inside the viewport.
+    let anchorY = this.anchor.y;
+    let cornerY = 16;
+    // Corner HUDs stack downward from the top-right; anchored ones stack upward from the anchor.
+    for (const t of this.toasts) {
+      if (t.dock !== 'corner') continue;
+      const w = t.el.offsetWidth || 290;
+      const x = vw - w - 16;
+      this.place(t.el, x, cornerY);
+      cornerY += (t.el.offsetHeight || 110) + 10;
+    }
     for (let i = this.toasts.length - 1; i >= 0; i--) {
-      const el = this.toasts[i].el;
-      const w = el.offsetWidth || 240;
-      const h = el.offsetHeight || 110;
-      y -= h + 8;
+      const t = this.toasts[i];
+      if (t.dock === 'corner') continue;
+      const w = t.el.offsetWidth || 290;
+      const h = t.el.offsetHeight || 110;
+      anchorY -= h + 10;
       const x = Math.min(vw - w - 8, Math.max(8, this.anchor.x - w / 2));
-      const top = Math.max(8, y);
-      el.style.transform = `translate3d(${x}px,${top}px,0)`;
-      el.dataset.x = String(x);
-      el.dataset.y = String(top);
+      this.place(t.el, x, Math.max(cornerY, anchorY));
     }
     this.rectsDirty = true;
     this.onChange();
+  }
+
+  private place(el: HTMLElement, x: number, y: number): void {
+    el.style.transform = `translate3d(${x}px,${y}px,0)`;
+    el.dataset.x = String(x);
+    el.dataset.y = String(y);
   }
 
   /** Toast rectangles in CSS px for hit-testing (cached until the layout changes). */
@@ -354,6 +391,34 @@ export class ToastUI {
     this.layer.remove();
     this.styleEl.remove();
   }
+}
+
+const ICONS: Record<'clock' | 'drop' | 'spark', string> = {
+  clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 12V7"/><path class="sd-hand" d="M12 12l4 2"/></svg>',
+  drop: '<svg viewBox="0 0 24 24"><path d="M12 3c3.5 4.4 6 7.6 6 10.5a6 6 0 0 1-12 0C6 10.6 8.5 7.4 12 3z"/><path d="M9.5 14.5a2.5 2.5 0 0 0 2.5 2.5"/></svg>',
+  spark: '<svg viewBox="0 0 24 24"><path d="M12 3v5M12 16v5M3 12h5M16 12h5M6 6l3 3M15 15l3 3M18 6l-3 3M9 15l-3 3"/></svg>',
+};
+
+/** Curved (semi-circular) arc gauge built with SVG — no canvas, no layout thrash. */
+function arcGauge(value: number, max: number, label: string): HTMLDivElement {
+  const ratio = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
+  const r = 40;
+  const arcLen = Math.PI * r;
+  const wrap = document.createElement('div');
+  wrap.className = 'sd-gauge';
+  wrap.innerHTML =
+    `<svg viewBox="0 0 96 56" role="img" aria-label="${value} of ${max}">` +
+    `<path class="sd-track" d="M8 50 A40 40 0 0 1 88 50" stroke-width="8" fill="none" stroke-linecap="round"/>` +
+    `<path class="sd-fill" d="M8 50 A40 40 0 0 1 88 50" stroke-width="8" fill="none" stroke-linecap="round" ` +
+    `stroke-dasharray="${arcLen.toFixed(1)}" stroke-dashoffset="${(arcLen * (1 - ratio)).toFixed(1)}"/></svg>`;
+  const text = document.createElement('div');
+  const big = document.createElement('b');
+  big.textContent = `${value} / ${max}`;
+  const small = document.createElement('span');
+  small.textContent = label;
+  text.append(big, small);
+  wrap.appendChild(text);
+  return wrap;
 }
 
 export function formatDuration(secs: number): string {

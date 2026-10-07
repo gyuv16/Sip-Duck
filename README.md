@@ -17,9 +17,9 @@
 
 <br />
 
-<img src="docs/screenshot-couple-pet.png" alt="Couple + Pet scene: girl, spirit and cat on the left, boy on the right, standing on the taskbar line" width="820" />
+<img src="docs/cinematic-overlay.png" alt="Overlay running above VS Code and a browser: the heroine drags the male lead across the screen with screen-tear particles while he holds up an explosive speech bubble reading SIP BUDDY IS FAINTING FROM THIRST!, the cat has fainted on the taskbar under water droplets, and glass HUD panels for hydration and sitting time glow in the top-right corner" width="860" />
 
-<sub><i>Couple + Pet mode — the characters live on a transparent, click-through layer above your desktop.</i></sub>
+<sub><i>“The Dynamic Interrupt” — the real engine rendering over a mock busy desktop (<code>src/demo.html</code>). Everything except the windows behind is the transparent, click-through overlay.</i></sub>
 
 </div>
 
@@ -61,6 +61,19 @@ Couples walk to each other, wave across the screen and share hearts. Pets follow
 
 </td>
 <td valign="top">
+
+### 🎬 Cinematic wake-up calls
+| Scene | What happens |
+| --- | --- |
+| Couple | The heroine **grabs the male lead and drags him across the screen**, over your open windows, with screen-tear slices, dust and sweat drops — or both raise a **giant warning sign** |
+| Pet | The cat **jumps onto a head and rides there**, or does **zoomies** knocking papers off your “desk” |
+| Hydration | The male lead raises an explosive **“SIP BUDDY IS FAINTING FROM THIRST!”** bubble while the cat faints, ears wilted, under water droplets. Logging a glass gives a splash-and-sparkle cheer |
+| Always | Glass **cinema HUD** panels (clock, arc gauge) instead of flat pop-ups; expressions pop up as manga emotes (‼, 💢, 💧, ♥, Z) |
+
+</td>
+</tr>
+<tr>
+<td valign="top" colspan="2">
 
 ### 🖱️ Lives on your desktop
 - Walks on the **top edge of your taskbar**
@@ -176,20 +189,58 @@ Preview the characters in a normal browser (desktop features turned off): `npm -
 │       ├── system_hook.rs  # idle + screen-time tracking, fullscreen detection
 │       └── overlay.rs      # window sizing, multi-monitor, click-through engine
 └── src/                    # frontend
-    ├── app.ts              # PixiJS engine, frame scheduler, IPC
-    ├── state_machine.ts    # character state machines + scene director
-    ├── renderer.ts         # sprite atlas, animation, particles
-    └── tracker_ui.ts       # hydration tracker + reminder pop-ups
+    ├── app.ts                  # PixiJS engine, frame scheduler, IPC, demo driver
+    ├── animation_controller.ts # Spine / spritesheet / procedural rigs, cross-fades, expressions, props
+    ├── scene_manager.ts        # action queue + pair choreographies, reactive FX, depth sorting
+    ├── fx_engine.ts            # pooled particles: droplets, sparkles, hearts, sweat, Zzz, glitch…
+    ├── state_machine.ts        # character state machines + physics director
+    ├── renderer.ts             # procedural fallback art baked into one atlas
+    ├── tracker_ui.ts           # hydration tracker + cinema HUD panels
+    └── demo.html               # overlay above a mock desktop (showcase / screenshots)
 ```
 </details>
 
 <details>
-<summary><b>🎨 Use your own character art</b></summary>
+<summary><b>🎨 Use your own character art (Spine 2D skeletons or sprite sheets)</b></summary>
 
-Put a TexturePacker/Aseprite JSON + PNG/AVIF sprite sheet at
-`src/public/assets/<hero|partner|cat|spirit>.json`. Name the animations
-`idle, walk, drink, stretch, whistle, dragged, fall, collapse, sleep, wave`, with frames
-anchored bottom-centre (96×128 for people, 72×64 for pets). It replaces the built-in art automatically.
+Characters are configured in `src/public/assets/characters.json`; anything not listed (or failing to load) falls back to the built-in art, so a broken asset never breaks the app. Start from [`characters.example.json`](src/public/assets/characters.example.json):
+
+```jsonc
+{
+  "hero": {
+    "type": "spine",                       // skeletal: mesh deformation, hair/cloth physics
+    "skeleton": "assets/hero/hero.skel",   // binary .skel or .json export
+    "atlas": "assets/hero/hero.atlas",
+    "scale": 0.25,
+    "mix": 0.2,                            // cross-fade seconds between animations
+    "animations": { "collapse": "faint", "dragged": "panic-dangle" },   // our name → your name
+    "expressions": { "panic": "face/panic", "happy": "face/smile" },     // played on track 1
+    "attachments": { "sign": { "slot": "prop-hand", "attachment": "warning-sign" } }
+  },
+  "cat": { "type": "spritesheet", "json": "assets/cat/cat.json" }
+}
+```
+
+- **Spine**: export with **Spine editor 4.3** (the runtime is `@esotericsoftware/spine-pixi-v8` 4.3; versions must match). The runtime is code-split and only downloaded when a Spine character is configured.
+- **Sprite sheets**: TexturePacker/Aseprite JSON + PNG/WEBP/AVIF with an `animations` map; frames anchored bottom-centre (96×128 people, 72×64 pets).
+- Animation names used by the engine: `idle, walk, drink, stretch, whistle, dragged, fall, collapse, sleep, wave`. Expressions: `neutral, happy, panic, dizzy, surprised, determined, sleepy, love, angry`. Props: `banner, sign, shout`.
+
+Swapping art in code:
+
+```ts
+const anims = await AnimationController.create(app.renderer, ['hero', 'cat'], fx, 'assets/characters.json');
+const hero = anims.createRig('hero');      // SpineRig, or SpriteRig fallback — same interface
+hero.play('walk', { fadeMs: 200 });        // blended transition
+hero.setExpression('panic');               // Spine: track-1 face animation; sprites: manga emote
+hero.attach('sign');                       // Spine: slot attachment swap; sprites: held prop
+hero.setFacing(-1);
+```
+</details>
+
+<details>
+<summary><b>🎬 Watch the cinematic demo</b></summary>
+
+`npm --prefix src run dev`, then open http://localhost:1420/demo.html — the real engine loops “The Dynamic Interrupt” over a mock desktop. In dev builds you can also drive scenes from the browser console: `sipDuck.sedentary('pull', 'none')`, `sipDuck.hydrate()`, `sipDuck.drink()`, `sipDuck.stretched()`, `sipDuck.mode('couple_pet')`.
 </details>
 
 <details>
