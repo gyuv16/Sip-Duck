@@ -72,3 +72,15 @@ with `animations` named `idle, walk, drink, stretch, whistle, dragged, fall, col
 * Click-through hover detection needs a global cursor position (not available on Wayland): there
   the overlay stays click-through and characters are not draggable.
 * Hydration counts reset at local midnight; screen-time-today resets at UTC midnight.
+
+## CI & releases
+
+`.github/workflows/build.yml` runs on every push/PR: frontend typecheck + build, then clippy,
+unit tests and a full `tauri build` on Windows (NSIS `.exe`), macOS (`.dmg`) and Linux (`.AppImage`).
+Installers are attached to each run as artifacts (Actions tab → run → *Artifacts*).
+
+To publish a GitHub Release with the installers attached:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
