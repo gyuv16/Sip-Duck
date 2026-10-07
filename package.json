@@ -1,0 +1,16 @@
+{
+  "name": "sip-duck-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Tauri CLI wrapper. Frontend lives in ./src, Rust backend in ./src-tauri.",
+  "scripts": {
+    "postinstall": "npm --prefix src install",
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "check": "npm --prefix src run typecheck && cargo check --manifest-path src-tauri/Cargo.toml"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.0"
+  }
+}
