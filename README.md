@@ -155,7 +155,7 @@ flowchart LR
 ```bash
 git clone https://github.com/gyuv16/Sip-Duck.git
 cd Sip-Duck
-npm install        # also installs the frontend in ./src
+npm install && npm ci --prefix src   # Tauri CLI + frontend deps
 npm run dev        # run the app with hot reload
 npm run build      # build the installer → src-tauri/target/release/bundle/
 ```
@@ -166,7 +166,7 @@ Preview the characters in a normal browser (desktop features turned off): `npm -
 <summary><b>📁 Project structure</b></summary>
 
 ```
-├── package.json            # Tauri CLI wrapper (installs ./src on postinstall)
+├── package.json            # Tauri CLI wrapper
 ├── .github/workflows/      # CI: build installers on Windows/macOS/Linux, release on tags
 ├── src-tauri/              # Rust backend
 │   ├── Cargo.toml          # size-optimised release profile

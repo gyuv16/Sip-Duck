@@ -64,8 +64,10 @@ jobs:
         with:
           workspaces: src-tauri -> target
 
-      - name: Install npm dependencies (root postinstall also installs ./src)
-        run: npm install --no-audit --no-fund
+      - name: Install npm dependencies
+        run: |
+          npm install --no-audit --no-fund
+          npm ci --prefix src --no-audit --no-fund
 
       - name: Build frontend (generate_context! needs src/dist)
         run: npm run build --prefix src
