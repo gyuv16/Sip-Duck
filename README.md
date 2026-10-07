@@ -1,74 +1,219 @@
-# Sip Duck — anime desktop overlay companion
+<div align="center">
 
-Tauri v2 (Rust) + PixiJS v8 (WebGL) desktop buddy that walks on your taskbar, faints when
-you forget to drink water and blows a whistle when you have been sitting too long.
+<img src="src-tauri/icons/128x128.png" width="96" alt="Sip Duck logo" />
 
-```
-├── package.json            # Tauri CLI wrapper (installs ./src on postinstall)
-├── src-tauri/              # Rust backend
-│   ├── Cargo.toml          # size-optimised release profile (lto, opt-level=z, abort, strip)
-│   ├── tauri.conf.json     # transparent, frameless, always-on-top, skip-taskbar window
-│   └── src/
-│       ├── main.rs         # setup, tray, global hotkeys, IPC commands
-│       ├── system_hook.rs  # GetLastInputInfo / CGEventSource idle + screen-time + fullscreen detection
-│       └── overlay.rs      # work-area sizing, multi-monitor, smart click-through engine
-└── src/                    # frontend
-    ├── index.html
-    ├── app.ts              # Pixi engine, adaptive frame scheduler, worker heartbeat, IPC
-    ├── state_machine.ts    # per-character FSM + scene Director (couple/pet/drag physics)
-    ├── renderer.ts         # procedural → packed texture atlas, ActorView, particle pool
-    └── tracker_ui.ts       # hydration tracker + non-blocking toast UI
-```
+# Sip Duck
 
-## Run / build
+**An anime desktop companion that walks on your taskbar, reminds you to drink water and makes you stand up when you've been sitting too long.**
 
-Prerequisites: Rust ≥ 1.77, Node ≥ 20, plus the [Tauri v2 OS prerequisites](https://v2.tauri.app/start/prerequisites/).
+[![Build](https://github.com/gyuv16/Sip-Duck/actions/workflows/build.yml/badge.svg)](https://github.com/gyuv16/Sip-Duck/actions/workflows/build.yml)
+![Tauri](https://img.shields.io/badge/Tauri-v2-24C8DB?logo=tauri&logoColor=white)
+![Rust](https://img.shields.io/badge/Rust-backend-000000?logo=rust&logoColor=white)
+![PixiJS](https://img.shields.io/badge/PixiJS-v8%20WebGL-E72264)
+![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-4f6df5)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-```bash
-npm install          # also installs ./src
-npm run dev          # tauri dev
-npm run build        # release installer (NSIS / DMG / AppImage)
-```
+[Download](#-download) · [Features](#-features) · [Controls](#-controls) · [How it stays light](#-how-it-stays-light) · [Build from source](#-build-from-source)
 
-Frontend only, in a browser: `npm --prefix src run dev` → http://localhost:1420 (IPC calls become no-ops).
+<br />
 
-## Controls
+<img src="docs/screenshot-couple-pet.png" alt="Couple + Pet scene: girl, spirit and cat on the left, boy on the right, standing on the taskbar line" width="820" />
+
+<sub><i>Couple + Pet mode — the characters live on a transparent, click-through layer above your desktop.</i></sub>
+
+</div>
+
+---
+
+## ✨ Features
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### 💧 Hydration reminders
+Every 45 minutes (configurable) your buddy **collapses, dizzy from thirst**.
+A small pop-up offers **I drank a glass** or **Snooze 10 min**. Logging a glass plays a
+drinking animation with a **water splash**, and your daily count and goal are tracked.
+
+</td>
+<td width="50%" valign="top">
+
+### 🧘 Sitting-too-long alerts
+Real keyboard/mouse idle time is read from the OS. After **45 minutes of continuous
+sitting**, the characters run to the middle of your screen, **blow a whistle** and hold a
+**“STAND UP & STRETCH!”** banner. Three minutes away from the desk resets the timer.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 🎭 Four scene modes
+| Mode | Cast |
+| --- | --- |
+| Solo | Hina |
+| Human + Pet | Hina + cat |
+| Couple | Hina + Ren |
+| Couple + Pet | Hina, Ren, cat and a floating spirit |
+
+Couples walk to each other, wave across the screen and share hearts. Pets follow their owner.
+
+</td>
+<td valign="top">
+
+### 🖱️ Lives on your desktop
+- Walks on the **top edge of your taskbar**
+- **Drag and throw** characters — they bounce off screen edges
+- **Click** to get a wave back
+- Clicks everywhere else **pass through** to your apps
+- **Falls asleep** when you're away, **hides itself** during fullscreen games and videos
+- Multi-monitor: move it to any screen from the tray
+
+</td>
+</tr>
+</table>
+
+<div align="center">
+<img src="docs/screenshot-pet.png" alt="Human + Pet scene: girl with a pink ribbon and an orange cat" width="640" />
+<br /><sub><i>Human + Pet mode</i></sub>
+</div>
+
+---
+
+## 📥 Download
+
+Grab the installer for your system from the **[Releases page](https://github.com/gyuv16/Sip-Duck/releases)**:
+
+| System | File |
+| --- | --- |
+| Windows 10/11 | `Sip Duck_x.y.z_x64-setup.exe` |
+| macOS | `Sip Duck_x.y.z_*.dmg` |
+| Linux | `sip-duck_x.y.z_amd64.AppImage` |
+
+> [!NOTE]
+> The builds are not code-signed yet. On Windows click **More info → Run anyway**; on macOS
+> right-click the app → **Open** the first time.
+
+Every CI run also attaches the installers as artifacts (**Actions** tab → latest run → **Artifacts**).
+
+---
+
+## 🎮 Controls
 
 | Action | How |
 | --- | --- |
-| Drag & throw a character | click-drag it (physics, wall bounce, lands on the taskbar line) |
-| Poke | click it (waves back; re-opens a dismissed reminder) |
-| Lock full click-through | `Ctrl+Shift+D` or tray |
-| Hydration reminder now | `Ctrl+Shift+H` or tray |
-| Scene mode, pause, next monitor, quit | tray menu (left-click tray = pause/resume) |
+| Drag & throw a character | Click and drag it |
+| Make a character react | Click it (re-opens a dismissed reminder) |
+| Make everything click-through | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd> |
+| Hydration reminder now | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> |
+| Pause / resume | Left-click the tray icon |
+| Scene mode, stretch now, next monitor, quit | Right-click the tray icon |
 
-## Performance design
+---
 
-* **Render on demand.** Pixi's ticker is stopped; `FrameScheduler` runs 60 FPS only while
-  something moves, is dragged or hovered, 4–12 FPS for idle breathing, and **0 FPS** (no rAF at
-  all) when everyone sleeps. Low rates use `setTimeout` + one rAF so the thread really sleeps,
-  and frames where no sprite changed skip the GPU draw entirely.
-* **Single atlas.** All character frames are rasterised once into one packed `RenderTexture`
-  (≈1–3 MB of GPU memory) and the vector geometry is destroyed right after. Switching scenes
-  builds the new atlas first, then destroys the old textures — nothing leaks.
-* **Suspension.** Fullscreen foreground app (Windows) or user pause → the window is hidden,
-  the cursor watcher backs off to 2.5 Hz and the renderer freezes. WebGL context loss is handled.
-* **Click-through without OS regions.** The window ignores the mouse; a 20 Hz Rust thread
-  checks the global cursor against hit boxes published by the frontend and enables input only
-  over characters/toasts.
-* **Native idle tracking**: one 1 Hz thread, IPC events only on change or every 5 s.
+## ⚡ How it stays light
 
-## Custom art
+No Electron, no bundled Chromium, no Python. The app uses the operating system's own webview through Tauri.
 
-Drop a TexturePacker/Aseprite JSON + PNG/AVIF sheet at `src/public/assets/<hero|partner|cat|spirit>.json`
-with `animations` named `idle, walk, drink, stretch, whistle, dragged, fall, collapse, sleep, wave`
-(frames anchored bottom-centre, 96×128 for humans, 72×64 for pets). It replaces the procedural art automatically.
+| Target | Design |
+| --- | --- |
+| Idle CPU < 0.5 % | Drawing **stops completely (0 FPS)** when nothing moves; idle breathing runs at 4–12 FPS using timers instead of a 60 Hz loop |
+| Active CPU < 3 % | 60 FPS only while something moves, is dragged or hovered; frames where nothing changed skip the GPU |
+| RAM < 20 MB (app side) | All character frames drawn once into **one shared texture**; old textures freed on every scene switch |
+| Installer < 15 MB | Rust release profile: `lto`, `opt-level = "z"`, `codegen-units = 1`, `panic = "abort"`, `strip` |
 
-## Platform notes
+> [!IMPORTANT]
+> These are design targets. They have not been measured on real hardware yet.
 
-* Idle tracking: Windows and macOS. On Linux there is no portable idle API without extra X11/Wayland
-  dependencies, so the sedentary timer counts from start-up / last acknowledged break.
-* Fullscreen suspension: Windows. On macOS fullscreen apps run in their own Space (WebKit throttles the hidden overlay).
-* Click-through hover detection needs a global cursor position (not available on Wayland): there
-  the overlay stays click-through and characters are not draggable.
-* Hydration counts reset at local midnight; screen-time-today resets at UTC midnight.
+```mermaid
+flowchart LR
+  subgraph Rust["Rust backend (src-tauri)"]
+    H["system_hook.rs<br/>idle time · screen time · fullscreen"]
+    O["overlay.rs<br/>transparent window · click-through"]
+    M["main.rs<br/>tray · hotkeys · IPC"]
+  end
+  subgraph Web["Frontend (src)"]
+    A["app.ts<br/>frame scheduler · input"]
+    S["state_machine.ts<br/>character behaviour"]
+    R["renderer.ts<br/>sprite atlas · animation"]
+    T["tracker_ui.ts<br/>reminders · pop-ups"]
+  end
+  H -- "activity / sedentary-alert" --> A
+  M -- "scene-mode / tray-action / suspend" --> A
+  A -- "set_hitboxes / set_capture" --> O
+  A --> S --> R
+  A --> T
+```
+
+---
+
+## 🛠️ Build from source
+
+**Requirements:** Rust ≥ 1.77, Node ≥ 20, and the [Tauri v2 system prerequisites](https://v2.tauri.app/start/prerequisites/).
+
+```bash
+git clone https://github.com/gyuv16/Sip-Duck.git
+cd Sip-Duck
+npm install && npm ci --prefix src   # Tauri CLI + frontend deps
+npm run dev        # run the app with hot reload
+npm run build      # build the installer → src-tauri/target/release/bundle/
+```
+
+Preview the characters in a normal browser (desktop features turned off): `npm --prefix src run dev` → http://localhost:1420
+
+<details>
+<summary><b>📁 Project structure</b></summary>
+
+```
+├── package.json            # Tauri CLI wrapper
+├── .github/workflows/      # CI: build installers on Windows/macOS/Linux, release on tags
+├── src-tauri/              # Rust backend
+│   ├── Cargo.toml          # size-optimised release profile
+│   ├── tauri.conf.json     # transparent, frameless, always-on-top window
+│   └── src/
+│       ├── main.rs         # setup, tray, global hotkeys, IPC commands
+│       ├── system_hook.rs  # idle + screen-time tracking, fullscreen detection
+│       └── overlay.rs      # window sizing, multi-monitor, click-through engine
+└── src/                    # frontend
+    ├── app.ts              # PixiJS engine, frame scheduler, IPC
+    ├── state_machine.ts    # character state machines + scene director
+    ├── renderer.ts         # sprite atlas, animation, particles
+    └── tracker_ui.ts       # hydration tracker + reminder pop-ups
+```
+</details>
+
+<details>
+<summary><b>🎨 Use your own character art</b></summary>
+
+Put a TexturePacker/Aseprite JSON + PNG/AVIF sprite sheet at
+`src/public/assets/<hero|partner|cat|spirit>.json`. Name the animations
+`idle, walk, drink, stretch, whistle, dragged, fall, collapse, sleep, wave`, with frames
+anchored bottom-centre (96×128 for people, 72×64 for pets). It replaces the built-in art automatically.
+</details>
+
+<details>
+<summary><b>🚀 Publishing a release</b></summary>
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+CI builds all three installers and publishes them on the Releases page with generated notes.
+</details>
+
+<details>
+<summary><b>🐧 Platform notes</b></summary>
+
+- **Idle tracking** works on Windows and macOS. Linux has no portable idle API, so the sitting timer counts from start-up / your last confirmed break.
+- **Fullscreen auto-hide** is Windows only (macOS fullscreen apps use their own Space).
+- **Wayland** doesn't expose the cursor position, so characters can't be dragged there; the overlay stays click-through.
+- Hydration counts reset at local midnight; screen time today resets at UTC midnight.
+</details>
+
+---
+
+<div align="center">
+<sub>Made with 💧 and Tauri · Stay hydrated, stretch often.</sub>
+</div>
