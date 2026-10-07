@@ -201,6 +201,7 @@ git push origin v0.1.0
 ```
 
 CI builds all three installers and publishes them on the Releases page with generated notes.
+Or without a local tag: **Actions → Build → Run workflow**, enter `v0.1.0` as *release_tag*.
 </details>
 
 <details>
